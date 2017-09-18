@@ -24,7 +24,7 @@ IFLOGGER = logging.getLogger('interface')
 class Info(object):
     """Handle afni output type and version information.
     """
-    __outputtype = 'AFNI'
+    __outputtype = 'NIFTI'
     ftypes = {'NIFTI': '.nii',
               'AFNI': '',
               'NIFTI_GZ': '.nii.gz'}
