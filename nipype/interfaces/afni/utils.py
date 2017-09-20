@@ -1800,14 +1800,6 @@ class TCat(AFNICommand):
     output_spec = AFNICommandOutputSpec
 
 class TCatSBInputSpec(AFNICommandInputSpec):
-    in_file = ImageFileAFNI(
-        exists=True, copy=False,
-        desc='List of tuples of file names and subbrick selectors as strings.'
-             'Don\'t forget to protect the single quotes in the subbrick selector'
-             'so the contents are protected from the command line interpreter.',
-        argstr='%s',
-        position=-1,
-        mandatory=True)
     in_files = traits.List(
         ImageFileAFNI(exists=True, copy=False),
         desc='List of tuples of file names and subbrick selectors as strings.'
@@ -1858,7 +1850,7 @@ class TCatSubBrick(AFNICommand):
 
     def _gen_filename(self, name):
         if name == 'out_file':
-            return self._gen_fname(self.inputs.in_files[0].full_fn, suffix='_tcat')
+            return self._gen_fname(self.inputs.in_files[0].fullfn, suffix='_tcat')
 
 
 class TStatInputSpec(AFNICommandInputSpec):
