@@ -27,7 +27,7 @@ from ..base import (
 from ...external.due import BibTeX
 from .base import (
     AFNICommandBase, AFNICommand, AFNICommandInputSpec, AFNICommandOutputSpec,
-    AFNIPythonCommandInputSpec, AFNIPythonCommand)
+    AFNIPythonCommandInputSpec, AFNIPythonCommand, ImageFileAFNI)
 
 class ABoverlapInputSpec(AFNICommandInputSpec):
     in_file_a = File(
@@ -1800,15 +1800,22 @@ class TCat(AFNICommand):
     output_spec = AFNICommandOutputSpec
 
 class TCatSBInputSpec(AFNICommandInputSpec):
-    in_files = traits.List(
-        traits.Tuple(File(exists=True),Str()),
+    in_file = ImageFileAFNI(
+        exists=True, copy=False,
         desc='List of tuples of file names and subbrick selectors as strings.'
              'Don\'t forget to protect the single quotes in the subbrick selector'
              'so the contents are protected from the command line interpreter.',
-        argstr='%s%s ...',
+        argstr='%s',
         position=-1,
-        mandatory=True,
-        copyfile=False)
+        mandatory=True)
+    in_files = traits.List(
+        ImageFileAFNI(exists=True, copy=False),
+        desc='List of tuples of file names and subbrick selectors as strings.'
+             'Don\'t forget to protect the single quotes in the subbrick selector'
+             'so the contents are protected from the command line interpreter.',
+        argstr='%s ...',
+        position=-1,
+        mandatory=True)
     out_file = File(
         desc='output image file name',
         argstr='-prefix %s',
@@ -1851,7 +1858,7 @@ class TCatSubBrick(AFNICommand):
 
     def _gen_filename(self, name):
         if name == 'out_file':
-            return self._gen_fname(self.inputs.in_files[0][0], suffix='_tcat')
+            return self._gen_fname(self.inputs.in_files[0].full_fn, suffix='_tcat')
 
 
 class TStatInputSpec(AFNICommandInputSpec):

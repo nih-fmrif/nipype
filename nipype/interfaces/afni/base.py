@@ -6,7 +6,7 @@ from __future__ import print_function, division, unicode_literals, absolute_impo
 from builtins import object, str
 from future.utils import raise_from
 
-import os
+import os, re
 from sys import platform
 from distutils import spawn
 
@@ -14,8 +14,11 @@ from ... import logging
 from ...utils.filemanip import split_filename, fname_presuffix
 
 from ..base import (
-    CommandLine, traits, CommandLineInputSpec, isdefined, File, TraitedSpec)
+    CommandLine, traits, CommandLineInputSpec, isdefined, File, TraitedSpec, ImageFile)
 from ...external.due import BibTeX
+import traits.api as traits
+from traits.trait_errors import TraitError
+
 
 # Use nipype's logging system
 IFLOGGER = logging.getLogger('interface')
@@ -303,3 +306,72 @@ class AFNIPythonCommand(AFNICommand):
     @property
     def cmdline(self):
         return "{} {}".format(self.inputs.py27_path, super(AFNIPythonCommand, self).cmdline)
+
+class ImageFileAFNI(ImageFile):
+    """
+    Defines an ImageFile trait specific to AFNI interfaces.
+
+    Files can either be difined as a single string or in multiple parts.
+    Constituent part file name parameter
+    ------------------------------------
+    value : str
+        Everything up to the + for orientation, if present
+    orient : str
+        Orientation tag, the value between the + and the first ., usually orig or tlrc
+    extension : str
+        Extension, either '.BRIK', '.nii', or '.nii.gz'
+    subbrick_selector : str
+        Selector for specific volumes from the image file, something like '[5,6..8]'
+        See sub-brick selector and sub-range selector from AFNI's help
+        https://afni.nimh.nih.gov/pub/dist/doc/program_help/common_options.html
+
+    """
+
+    def __init__(self, value='', filter=None, auto_set=False, entries=0,
+                 exists=False, types=['nifti1', 'nifti2', 'afni'],
+                 allow_compressed=True, **metadata):
+        
+        self.types = types
+        self.allow_compressed = allow_compressed
+        self.orient = ''
+        self.extension = ''
+        self.sbs = ''
+        self.path = ''
+        self.filename = ''
+
+        super(ImageFileAFNI, self).__init__(value, filter, auto_set, entries,
+                                            exists, types, allow_compressed,
+                                            **metadata)
+
+    def validate(self, object, name, value):
+        """ Validates that a specified value is valid for this trait.
+        """
+        #maybe clean this up with a regex, but for now, this works
+        path, filename = os.path.split(value)
+        filename, sbssep, sbs = filename.partition('[')
+        if sbs != '':
+            sbs = sbssep+sbs
+        try:
+            ext = re.findall(r'(\.nii\.gz$|\.HDR$|\.BRIK$|\.nii$)', filename)[0]
+        except IndexError:
+            ext = '.HDR'
+        filename = filename[:-len(ext)]
+        filename, orientsep, orient = filename.partition('+')
+        if orient != '':
+            orient = orientsep+orient
+        self.orient = orient
+        self.extension = ext
+        self.sbs = sbs
+        self.path = path
+        self.filename = filename
+        self.fullfn = self.path +  os.path.sep + self.filename + self.orient + self.extension
+        to_validate = self.fullfn 
+        validated_value = super(ImageFileAFNI, self).validate(object, name, to_validate)
+        validated_value += self.sbs
+        
+        return validated_value
+
+    def __str__(self):
+        return self.path + os.path.sep + self.filename + self.orient + self.extension + self.sbs
+
+
