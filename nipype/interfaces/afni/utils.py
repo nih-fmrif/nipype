@@ -1800,18 +1800,17 @@ class TCat(AFNICommand):
     output_spec = AFNICommandOutputSpec
 
 class TCatSBInputSpec(AFNICommandInputSpec):
-    in_files = traits.List(
+    in_file = InputMultiPath(
         ImageFileAFNI(exists=True, copy=False),
-        desc='List of tuples of file names and subbrick selectors as strings.'
-             'Don\'t forget to protect the single quotes in the subbrick selector'
-             'so the contents are protected from the command line interpreter.',
+        desc='file or files to concatenate',
         argstr='%s ...',
         position=-1,
         mandatory=True)
     out_file = File(
         desc='output image file name',
         argstr='-prefix %s',
-        genfile=True)
+        name_source='in_file',
+        name_template='%s_tcat')
     rlt = traits.Enum(
         '', '+', '++',
         argstr='-rlt%s',
@@ -1847,11 +1846,6 @@ class TCatSubBrick(AFNICommand):
     _cmd = '3dTcat'
     input_spec = TCatSBInputSpec
     output_spec = AFNICommandOutputSpec
-
-    def _gen_filename(self, name):
-        if name == 'out_file':
-            return self._gen_fname(self.inputs.in_files[0].fullfn, suffix='_tcat')
-
 
 class TStatInputSpec(AFNICommandInputSpec):
     in_file = File(

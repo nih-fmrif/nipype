@@ -27,7 +27,7 @@ IFLOGGER = logging.getLogger('interface')
 class Info(object):
     """Handle afni output type and version information.
     """
-    __outputtype = 'NIFTI'
+    __outputtype = 'NIFTI_GZ'
     ftypes = {'NIFTI': '.nii',
               'AFNI': '',
               'NIFTI_GZ': '.nii.gz'}
@@ -108,7 +108,7 @@ class Info(object):
         """
         # warn(('AFNI has no environment variable that sets filetype '
         #      'Nipype uses NIFTI_GZ as default'))
-        return 'AFNI'
+        return 'NIFTI_GZ'
 
     @staticmethod
     def standard_image(img_name):
@@ -281,6 +281,50 @@ class AFNICommand(AFNICommandBase):
                                 use_ext=False, newpath=cwd)
         return fname
 
+    def _parse_inputs(self, skip=None):
+        """Parse all inputs using the ``argstr`` format string in the Trait.
+
+        Any inputs that are assigned (not the default_value) are formatted
+        to be added to the command line.
+
+        Returns
+        -------
+        all_args : list
+            A list of all inputs formatted for the command line.
+
+        """
+        all_args = []
+        initial_args = {}
+        final_args = {}
+        metadata = dict(argstr=lambda t: t is not None)
+        for name, spec in sorted(self.inputs.traits(**metadata).items()):
+            if skip and name in skip:
+                continue
+            value = getattr(self.inputs, name)
+            if spec.name_source:
+                value = self._filename_from_source(name)
+            elif spec.genfile:
+                if not isdefined(value) or value is None:
+                    value = self._gen_filename(name)
+
+            if not isdefined(value):
+                continue
+            arg = self._format_arg(name, spec, value)
+            if arg is None:
+                continue
+            pos = spec.position
+            if pos is not None:
+                if int(pos) >= 0:
+                    initial_args[pos] = arg
+                else:
+                    final_args[pos] = arg
+            else:
+                all_args.append(arg)
+        first_args = [arg for pos, arg in sorted(initial_args.items())]
+        last_args = [arg for pos, arg in sorted(final_args.items())]
+        return first_args + all_args + last_args
+
+
 def no_afni():
     """ Checks if AFNI is available """
     if Info.version() is None:
@@ -298,6 +342,7 @@ class AFNIPythonCommandInputSpec(CommandLineInputSpec):
 class AFNIPythonCommand(AFNICommand):
     @property
     def cmd(self):
+        """Finds the path to the python script, if it can't returns the command"""
         if spawn.find_executable(super(AFNIPythonCommand, self).cmd) is not None:
             return spawn.find_executable(super(AFNIPythonCommand, self).cmd)
         else:
@@ -311,33 +356,18 @@ class ImageFileAFNI(ImageFile):
     """
     Defines an ImageFile trait specific to AFNI interfaces.
 
-    Files can either be difined as a single string or in multiple parts.
-    Constituent part file name parameter
-    ------------------------------------
-    value : str
-        Everything up to the + for orientation, if present
-    orient : str
-        Orientation tag, the value between the + and the first ., usually orig or tlrc
-    extension : str
-        Extension, either '.BRIK', '.nii', or '.nii.gz'
-    subbrick_selector : str
-        Selector for specific volumes from the image file, something like '[5,6..8]'
-        See sub-brick selector and sub-range selector from AFNI's help
-        https://afni.nimh.nih.gov/pub/dist/doc/program_help/common_options.html
+    Files with an optional subbrick selector. Files without an extension
+    specified are assumed to have a .HEAD extension.
+    Other commandline fanciness will be implmented as interfaces.
 
     """
 
     def __init__(self, value='', filter=None, auto_set=False, entries=0,
                  exists=False, types=['nifti1', 'nifti2', 'afni'],
                  allow_compressed=True, **metadata):
-        
+    
         self.types = types
         self.allow_compressed = allow_compressed
-        self.orient = ''
-        self.extension = ''
-        self.sbs = ''
-        self.path = ''
-        self.filename = ''
 
         super(ImageFileAFNI, self).__init__(value, filter, auto_set, entries,
                                             exists, types, allow_compressed,
@@ -347,31 +377,14 @@ class ImageFileAFNI(ImageFile):
         """ Validates that a specified value is valid for this trait.
         """
         #maybe clean this up with a regex, but for now, this works
+
         path, filename = os.path.split(value)
-        filename, sbssep, sbs = filename.partition('[')
-        if sbs != '':
-            sbs = sbssep+sbs
         try:
-            ext = re.findall(r'(\.nii\.gz$|\.HDR$|\.BRIK$|\.nii$)', filename)[0]
+            ext = re.findall(r'(\.nii\.gz$|\.HEAD$|\.BRIK$|\.nii$)', filename)[0]
+            filename = filename[:-len(ext)]
         except IndexError:
-            ext = '.HDR'
-        filename = filename[:-len(ext)]
-        filename, orientsep, orient = filename.partition('+')
-        if orient != '':
-            orient = orientsep+orient
-        self.orient = orient
-        self.extension = ext
-        self.sbs = sbs
-        self.path = path
-        self.filename = filename
-        self.fullfn = self.path +  os.path.sep + self.filename + self.orient + self.extension
-        to_validate = self.fullfn 
+            ext = '.HEAD'
+
+        to_validate = path + os.path.sep + filename + ext
         validated_value = super(ImageFileAFNI, self).validate(object, name, to_validate)
-        validated_value += self.sbs
-        
         return validated_value
-
-    def __str__(self):
-        return self.path + os.path.sep + self.filename + self.orient + self.extension + self.sbs
-
-

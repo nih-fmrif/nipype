@@ -2067,7 +2067,6 @@ class MultiPath(traits.List):
         if not isdefined(value) or \
                 (isinstance(value, list) and len(value) == 0):
             return Undefined
-
         newvalue = value
 
         if not isinstance(value, list) \
